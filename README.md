@@ -1,5 +1,7 @@
 # Ultra Guardião
 
+**English:** a lightweight Windows tray app (Rust) that watches RAM and CPU and acts before the machine freezes, e.g. by closing orphaned processes left behind by coding agents. UI in Brazilian Portuguese. Early stage; contributions welcome.
+
 Programa leve para Windows que impede o PC de travar. Fica no relógio (bandeja), vigia RAM e CPU
 a cada 3 segundos e age antes da memória acabar. Interface feita com [Rune](https://github.com/anomalyco/rune)
 (Rust, renderizada na GPU), que só existe enquanto a janela está aberta.
