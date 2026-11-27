@@ -223,7 +223,11 @@ fn agora(s: &Ui, t: tok::Theme) -> El {
         ).w_full().h(40.0))
         .child(match &s.otim {
             Some((busy, msg)) => text(msg.clone()).font(T_BODY).color(if *busy { t.text_secondary } else { green() }).wrap(),
-            None => text("Libera memória, fecha órfãos, limpa o que for seguro e pede análise da IA").font(T_SMALL).color(t.text_secondary).wrap(),
+            None => text(if s.ia_ativa {
+                "Libera memória, fecha órfãos sem janela, limpa o que for seguro e pede análise da IA (envia dados do PC ao Codex)"
+            } else {
+                "Libera memória, fecha órfãos sem janela e limpa o que for seguro"
+            }).font(T_SMALL).color(t.text_secondary).wrap(),
         });
 
     // Grade 2x2 de métricas.
@@ -535,6 +539,9 @@ fn analise(s: &Ui, t: tok::Theme) -> El {
             small_button("ia-run", "Analisar agora", t, Some(accent()), |s: &mut Ui| s.start_analysis("Pedido manual pelo painel.".into(), false))
         });
     out = out.child(top);
+    if s.ia_ativa {
+        out = out.child(text("\"Analisar agora\" e \"Terminal\" usam o Codex: dados deste PC (programas, uso, registros do Windows) são enviados ao serviço de IA. Detalhes no README.").font(T_SMALL).color(t.text_secondary).wrap());
+    }
 
     if s.ia_busy {
         out = out.child(card(t).child(row().w_full().items_center().gap(G12)
@@ -543,7 +550,7 @@ fn analise(s: &Ui, t: tok::Theme) -> El {
     }
 
     let Some(a) = &s.analise else {
-        return out.child(empty_state("Nenhuma análise ainda", "Toque em \"Analisar agora\": a IA lê a caixa-preta e os registros do Windows e diz a causa e o que fazer. Ela também roda sozinha depois de um travamento.", t));
+        return out.child(empty_state("Nenhuma análise ainda", "Toque em \"Analisar agora\": a IA lê a caixa-preta e os registros do Windows e diz a causa e o que fazer. Ela só roda sem clique se você ativar ia_automatica no config.json.", t));
     };
 
     let gc = gravidade_color(&a.gravidade);

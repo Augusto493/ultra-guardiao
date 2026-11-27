@@ -1,9 +1,9 @@
 //! Leituras e ações do Windows: memória, CPU, processos. Tudo via Win32, sem dependências pesadas.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::mem::{size_of, zeroed};
 
-use windows_sys::Win32::Foundation::{CloseHandle, FILETIME, HANDLE, INVALID_HANDLE_VALUE};
+use windows_sys::Win32::Foundation::{BOOL, CloseHandle, FILETIME, HANDLE, HWND, INVALID_HANDLE_VALUE, LPARAM};
 use windows_sys::Win32::Storage::FileSystem::GetDiskFreeSpaceExW;
 use windows_sys::Win32::System::Diagnostics::ToolHelp::{
     CreateToolhelp32Snapshot, PROCESSENTRY32W, Process32FirstW, Process32NextW, TH32CS_SNAPPROCESS,
@@ -18,7 +18,7 @@ use windows_sys::Win32::System::Threading::{
     PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SET_INFORMATION, PROCESS_SET_QUOTA, PROCESS_TERMINATE,
     SetPriorityClass, TerminateProcess,
 };
-use windows_sys::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowThreadProcessId};
+use windows_sys::Win32::UI::WindowsAndMessaging::{EnumWindows, GetForegroundWindow, GetWindowThreadProcessId, IsWindowVisible};
 
 pub const GB: f64 = 1024.0 * 1024.0 * 1024.0;
 pub const MB: f64 = 1024.0 * 1024.0;
@@ -202,6 +202,25 @@ pub fn foreground_pid() -> u32 {
         GetWindowThreadProcessId(w, &mut pid);
         pid
     }
+}
+
+/// Processos donos de alguma janela visível (minimizada conta). `None` se o Windows não deixou listar.
+pub fn visible_window_pids() -> Option<HashSet<u32>> {
+    unsafe extern "system" fn collect(w: HWND, out: LPARAM) -> BOOL {
+        // SAFETY: `out` é o HashSet passado abaixo, vivo durante todo o EnumWindows.
+        unsafe {
+            if IsWindowVisible(w) != 0 {
+                let mut pid = 0u32;
+                GetWindowThreadProcessId(w, &mut pid);
+                (*(out as *mut HashSet<u32>)).insert(pid);
+            }
+        }
+        1
+    }
+    let mut set = HashSet::<u32>::new();
+    // SAFETY: callback com a assinatura exigida; o ponteiro só é usado durante a chamada.
+    let ok = unsafe { EnumWindows(Some(collect), &mut set as *mut HashSet<u32> as LPARAM) } != 0;
+    ok.then_some(set)
 }
 
 pub fn uptime_secs() -> u64 {

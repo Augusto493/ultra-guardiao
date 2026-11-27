@@ -52,6 +52,13 @@ impl Event {
 
 type Id = (u32, u64);
 
+/// Órfão que pode ser fechado: na lista, não protegido e sem janela visível.
+/// Sem a lista de janelas (`None`), não fecha nada.
+fn can_close_orphan(cfg: &Config, p: &Proc, by_pid: &HashMap<u32, &Proc>, windows: Option<&HashSet<u32>>) -> bool {
+    !cfg.is_protected(&p.name) && cfg.orphan_ok(&p.name) && is_orphan(p, by_pid)
+        && windows.is_some_and(|w| !w.contains(&p.pid))
+}
+
 #[derive(Default)]
 pub struct Guard {
     pub level: Level,
@@ -136,8 +143,9 @@ impl Guard {
             if level == Level::Critico && self.last_kill.is_none_or(|t| now.duration_since(t) > Duration::from_secs(60)) {
                 self.last_kill = Some(now);
                 let mut closed = Vec::new();
+                let windows = sys::visible_window_pids();
                 for p in procs {
-                    if protected(p) || !cfg.orphan_ok(&p.name) || !is_orphan(p, &by_pid) { continue; }
+                    if protected(p) || !can_close_orphan(cfg, p, &by_pid, windows.as_ref()) { continue; }
                     let idle = self.idle_since.get(&id(p)).is_some_and(|t| now.duration_since(*t) > Duration::from_secs(180));
                     if idle && sys::kill(p.pid) {
                         closed.push(format!("{} ({:.0} MB)", p.name, p.private as f64 / MB));
@@ -233,8 +241,9 @@ impl Guard {
     pub fn close_orphans_now(&mut self, cfg: &Config, procs: &[Proc]) -> Event {
         let by_pid: HashMap<u32, &Proc> = procs.iter().map(|p| (p.pid, p)).collect();
         let mut closed = Vec::new();
+        let windows = sys::visible_window_pids();
         for p in procs {
-            if cfg.is_protected(&p.name) || !cfg.orphan_ok(&p.name) || !is_orphan(p, &by_pid) { continue; }
+            if !can_close_orphan(cfg, p, &by_pid, windows.as_ref()) { continue; }
             if sys::kill(p.pid) { closed.push(p.name.clone()); self.closed_total += 1; }
         }
         if closed.is_empty() { Event::new(Kind::Info, "Nenhum processo órfão para fechar.", false) }
@@ -300,5 +309,15 @@ mod tests {
         assert!(!is_orphan(&child, &by));
         assert!(is_orphan(&lost, &by));
         assert!(is_orphan(&reused_parent, &by));
+    }
+
+    #[test]
+    fn orphan_with_visible_window_is_never_closed() {
+        let cfg = Config::default();
+        let lost = p(30, 99, 300);
+        let by: HashMap<u32, &Proc> = [(lost.pid, &lost)].into();
+        assert!(can_close_orphan(&cfg, &lost, &by, Some(&HashSet::new())));
+        assert!(!can_close_orphan(&cfg, &lost, &by, Some(&HashSet::from([30]))));
+        assert!(!can_close_orphan(&cfg, &lost, &by, None));
     }
 }

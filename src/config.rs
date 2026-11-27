@@ -29,11 +29,11 @@ pub struct Config {
     pub ia_modelo: String,
     /// Modelo barato para análises automáticas de rotina (depois de um Crítico).
     pub ia_modelo_rapido: String,
-    /// Analisar sozinho depois de um travamento total ou de sair do Crítico.
+    /// Análises sem clique (rotina, após travamento total ou ao sair do Crítico). Desligado por padrão: envia dados do PC.
     pub ia_automatica: bool,
-    /// A cada quantas horas a IA faz uma análise de rotina sozinha (0 = desligado).
+    /// Com `ia_automatica`, a cada quantas horas a IA faz uma análise de rotina (0 = sem rotina).
     pub ia_intervalo_horas: u32,
-    /// Aplica sozinha as ações seguras sugeridas pela IA (proteger, ajustar limites, órfãos, faxina sem admin).
+    /// Aplica sozinha as ações seguras sugeridas pela IA (proteger, ajustar limites, faxina sem admin). Desligado por padrão.
     pub ia_aplicar_auto: bool,
     /// Garante que o Guardião abra com o Windows (supervisionado, reinicia se cair).
     pub iniciar_com_windows: bool,
@@ -72,9 +72,9 @@ impl Default for Config {
             ia_ativa: true,
             ia_modelo: "gpt-6-luna".into(),
             ia_modelo_rapido: "gpt-5.6-luna".into(),
-            ia_automatica: true,
+            ia_automatica: false,
             ia_intervalo_horas: 3,
-            ia_aplicar_auto: true,
+            ia_aplicar_auto: false,
             iniciar_com_windows: true,
             silencioso: true,
         }
@@ -119,5 +119,25 @@ impl Config {
     }
     pub fn orphan_ok(&self, name: &str) -> bool {
         self.orfaos_fechaveis.iter().any(|p| p.eq_ignore_ascii_case(name))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ia_sem_clique_desligada_por_padrao() {
+        for c in [Config::default(), serde_json::from_str::<Config>("{}").expect("config vazia")] {
+            assert!(!c.ia_automatica);
+            assert!(!c.ia_aplicar_auto);
+            assert!(c.ia_ativa, "o botão manual continua funcionando");
+        }
+    }
+
+    #[test]
+    fn config_existente_mantem_os_valores() {
+        let c: Config = serde_json::from_str(r#"{"ia_automatica":true,"ia_aplicar_auto":true}"#).expect("config");
+        assert!(c.ia_automatica && c.ia_aplicar_auto);
     }
 }

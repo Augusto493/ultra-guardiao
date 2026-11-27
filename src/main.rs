@@ -53,11 +53,12 @@ const APP_ID: &str = "com.ultraguardiao.app";
 const TICK: Duration = Duration::from_secs(3);
 const CALM_TICK: Duration = Duration::from_secs(8);
 
-/// Só o que não pode derrubar programa nenhum: proteger, ajustar limites, órfãos e faxina sem admin.
-/// Nada de fechar processo, reiniciar ou pedir administrador.
+/// Só o que não pode derrubar programa nenhum: proteger, ajustar limites e faxina sem admin.
+/// Nada de fechar processo, reiniciar ou pedir administrador. `adicionar_orfao` fica de fora:
+/// autoriza fechar processos depois, então exige o clique do usuário.
 fn auto_seguro(a: &analyst::Acao) -> bool {
     match a.tipo.as_str() {
-        "proteger" | "adicionar_orfao" | "ajustar_limite" => true,
+        "proteger" | "ajustar_limite" => true,
         "faxina" => cleanup::ITEMS.iter().any(|i| i.id == a.alvo.trim() && !i.admin),
         _ => false,
     }
@@ -246,7 +247,11 @@ fn worker(cfg: &mut Config, rx: &mpsc::Receiver<Cmd>, ui: AppHandle<Ui>, tray: A
                             for n in notes { s.push_log(Kind::Acao, n); }
                             let ia = if cfg2.ia_ativa && !s.ia_busy {
                                 s.start_analysis("Otimização completa pedida no painel.".into(), true);
-                                " A IA está analisando e aplica sozinha o que for seguro (leva ~2 min)."
+                                if cfg2.ia_aplicar_auto {
+                                    " A IA está analisando (dados do PC são enviados ao Codex) e aplica sozinha o que for seguro."
+                                } else {
+                                    " A IA está analisando (dados do PC são enviados ao Codex); veja as sugestões na aba Análise."
+                                }
                             } else { "" };
                             s.otim = Some((false, format!("Pronto às {}: {resumo}{extra}{ia}", clock::hhmm(clock::now_unix(), s.offset))));
                         });
@@ -282,7 +287,7 @@ fn worker(cfg: &mut Config, rx: &mpsc::Receiver<Cmd>, ui: AppHandle<Ui>, tray: A
                 }
                 Cmd::Analisar { motivo, rapido, health, log } => {
                     let modelo = if rapido { cfg.ia_modelo_rapido.clone() } else { cfg.ia_modelo.clone() };
-                    // Análises automáticas (tudo menos o botão do painel) aplicam sozinhas o que é seguro.
+                    // Só com `ia_aplicar_auto`: tudo menos o "Analisar agora" aplica sozinho o que é seguro.
                     let aplicar_auto = cfg.ia_aplicar_auto && !motivo.starts_with("Pedido manual");
                     let ctx = analyst::Context { snap: last_snap.clone(), health, log, cfg: cfg.clone(), motivo };
                     let ui2 = ui.clone();
@@ -360,7 +365,7 @@ fn worker(cfg: &mut Config, rx: &mpsc::Receiver<Cmd>, ui: AppHandle<Ui>, tray: A
                     ui.update(move |s, _| s.start_analysis(motivo, true));
                 }
 
-                // IA de rotina: sozinha a cada N horas, com o modelo barato, aplicando só o que é seguro.
+                // IA de rotina (só com `ia_automatica`): a cada N horas, com o modelo barato.
                 if cfg.ia_ativa && cfg.ia_automatica && cfg.ia_intervalo_horas > 0 && Instant::now() >= next_routine {
                     next_routine = Instant::now() + Duration::from_secs(cfg.ia_intervalo_horas as u64 * 3600);
                     let motivo = "Análise de rotina: otimizar o PC e prevenir travamentos antes que aconteçam.".to_string();
@@ -525,5 +530,19 @@ fn apply_ai_action(cfg: &mut Config, a: &analyst::Acao, ui: &AppHandle<Ui>) -> S
             if ok { "IA → reinício agendado em 60 s (cancele com: shutdown /a).".into() } else { "Não consegui agendar o reinício.".into() }
         }
         other => format!("Ação \"{other}\" é manual: {}", a.explicacao),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn adicionar_orfao_exige_clique() {
+        let acao = |tipo: &str| analyst::Acao { titulo: String::new(), explicacao: String::new(), tipo: tipo.into(), alvo: "x.exe".into() };
+        assert!(!auto_seguro(&acao("adicionar_orfao")));
+        assert!(!auto_seguro(&acao("fechar_processo")));
+        assert!(!auto_seguro(&acao("reiniciar")));
+        assert!(auto_seguro(&acao("proteger")));
     }
 }

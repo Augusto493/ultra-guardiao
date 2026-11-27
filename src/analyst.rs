@@ -243,7 +243,7 @@ Regras:
   - "reiniciar": alvo = ""
   - "manual": alvo = "" — algo que o usuário precisa fazer à mão (ex.: atualizar um driver pelo site do fabricante); explique o passo a passo em "explicacao"
 - Nunca sugira fechar processos do sistema do Windows nem os da lista de protegidos.
-- As ações "proteger", "ajustar_limite", "adicionar_orfao" e "faxina" (só as que não pedem administrador: edge, paperclip) serão aplicadas AUTOMATICAMENTE pelo Guardião, sem o usuário ver antes; portanto só proponha-as com alta confiança.
+- As ações "proteger", "ajustar_limite" e "faxina" (só as que não pedem administrador: edge, paperclip) podem ser aplicadas AUTOMATICAMENTE pelo Guardião, sem o usuário ver antes (se ele tiver ativado isso); portanto só proponha-as com alta confiança.
 - NUNCA proponha "fechar_processo" nem "reiniciar" para navegadores (chrome, msedge, firefox), WhatsApp, Teams, Zoom, Discord, OneDrive, editores ou qualquer programa com janela que o usuário use; o objetivo é nenhum programa dar erro nem fechar. Prefira "proteger" e "ajustar_limite" (limites mais baixos agem mais cedo).
 - Objetivo final: o PC nunca travar e nenhum programa falhar; priorize causa raiz e prevenção.
 - gravidade: "baixa", "media" ou "alta".
